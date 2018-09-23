@@ -27,6 +27,9 @@ This exercise involves the UN data set from `alr3` package. Install `alr3` and t
 
 ```{r data}
 options(warn=-1)
+include = FALSE
+suppressWarnings(library(carData))
+suppressWarnings(library(car))
 library(alr3)
 data(UN3, package="alr3")
 # help(UN3) 
