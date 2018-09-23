@@ -1,8 +1,9 @@
 ---
 title: "HW2 STA521 Fall18"
-author: '[Your Name Here, netid and github username here]'
+author: 'Zhen Han Si, 0854615, szhhan'
 date: "Due September 23, 2018 5pm"
 output:
+  word_document: default
   pdf_document: default
   html_document:
     df_print: paged
@@ -29,19 +30,34 @@ library(alr3)
 data(UN3, package="alr3")
 help(UN3) 
 library(car)
+library(knitr)
+library(ggplot2)
+library(GGally)
+library(MASS)
+library(dplyr)
+library(car)
 ```
 
 
 1. Create a summary of the data.  How many variables have missing data?  Which are quantitative and which are qualtitative?
 
 ```{r}
-
+summary(UN3)
+sapply(UN3,class)
 ```
+
+All the variables except Purban have missing values. All the values are quantitative. 
 
 2. What is the mean and standard deviation of each quantitative predictor?  Provide in a nicely formatted table.
 
 ```{r}
-
+average = sapply(UN3,mean,na.rm=TRUE)
+sd = sapply(UN3,sd,na.rm=TRUE)
+matrix = matrix(c(average,sd),ncol=2,nrow=7)
+table = as.data.frame(matrix)
+rownames(table) = colnames(UN3)
+colnames(table) = c('mean','sd')
+kable(table,format='markdown')
 ```
 
 
@@ -50,52 +66,228 @@ highlighting the relationships among the predictors. Comment
 on your findings regarding trying to predict `ModernC` from the other variables.  Are there potential outliers, nonlinear relationships or transformations that appear to be needed based on your graphical EDA?
 
 ```{r}
+scatterplotMatrix(UN3)
+UN3_fix = na.omit(UN3)
+ggpairs(UN3_fix)
+par(mfrow=c(3,2))
+boxplot(UN3['Pop'],main='pop')
+boxplot(UN3['Fertility'],main='Fertility')
+boxplot(UN3['Change'],main='Change')
+boxplot(UN3['PPgdp'],main='PPgdp')
+boxplot(UN3['Frate'],main='Frate')
+boxplot(UN3['Purban'],main='Purban')
+par(mfrow=c(1,1))
 
 ```
+
+By looking at the scatterplot and the ggplot, I think obviously PPgdp and Pop need a transformation becasue most of the points are crowded together with several outliers. We cannot match any linearities under that condition. Frate doesnt look like have a great correlation/linearity with the Y variable(ModernC) and other 3 variables: Fertility, Purban and changes looks good (having linearity and correlations). 
+
+I saw some potential outliers in PPgdp and Pop, we are going to transform these two. I also saw some potential y outliers in Purban, I will check it further later.
+
+Two observations, China and India are obviously from others. 
 
 ## Model Fitting
 
 4.  Use the `lm()` function to perform a multiple linear regression with `ModernC` as the response and all other variables as the predictors, using the formula `ModernC ~ .`, where the `.` includes all remaining variables in the dataframe.  Create  diagnostic residual plot from the linear model object and comment on results regarding assumptions.  How many observations are used in your model fitting?
 
 ```{r}
-
+model = lm(ModernC ~.,data=UN3)
+par(mfrow=c(2,2))
+plot(model)
+par(mfrow=c(1,1))
+summary(model)
 ```
+
+By summary, 210-85 = 125 observations are used in the regression. 
+
+Residuals plots is okay but quite diverse. There are some points having big residuals. but overall, the residual vs fitted plot is a good indication I don’t have non-linear relationships since the fitted line is horizontal with no trends.
+
+The normal QQ also looks fine, but a tiny left skewed on large theoretical quantiles. The scale Location plots mentions an equal variance, the line is basically horizontal. 
+
+And there's not much outlier, besides China and India having very large leverages. 
+
 
 5. Examine added variable plots `car::avPlot` or `car::avPlots`  for your model above. Are there any plots that suggest that transformations are needed for any of the terms in the model? Describe. Is it likely that any of the localities are influential for any of the terms?  Which localities?  Which terms?  
 
 ```{r}
-
+avPlots(model)
 ```
+
+From the avPlot I am further making sure that I definitely to transform the Pop  because most of the points are just crowded together with only two outliers affecting the line. I also want to think about maybe transform the PPgdp even though it's not as bad as the Pop. I will test it in the next questions to see whether transform it or not. But looking at the plot I will definitely transform Pop. 
+
+Looking at the Change avPlot, it shows that Kuwait and Cooks island maybe an influential point. And Switzerland and Norway are influnetial to PPgdp, India and China are very influntial to Pop, Thailand is influntial to Fertility. 
+
 
 6.  Using the Box-Tidwell  `car::boxTidwell` or graphical methods find appropriate transformations of the predictor variables to be used as predictors in the linear model.  If any predictors are negative, you may need to transform so that they are non-negative.  Describe your method and  the resulting transformations.
 
 
 ```{r}
-
+min(UN3_fix['Change'])
+UN3_fix['Change'] = UN3_fix['Change'] + 2.1 
+boxTidwell(ModernC~Pop+PPgdp,~Change+Purban+Fertility+Frate,data=UN3_fix)
+powerTransform(as.matrix(UN3_fix)~.,family="bcnPower",data=UN3_fix)
 ```
+
+I first transformed the Change to all positive values by adding 2.1 to each entries because the minumum value of Changes is -1.1 so i want to make sure that all values in Changes are above 1. 
+
+Then i use the boxTidewell to do the transformation for PPgdp and Pop I discovered that boxTidewill did not suggest us to do any transformations (P value is so large). But by looking at the avplot, I believe at least we have to do a transformation on Pop. So then I try the function powertransform()
+
+By using the powertransform(), it suggests I only have to transform Pop on a degree of 0.33, which is a number between 0.5 and 0. I asked the professor for recommendations and she tells me she will try both of them and she will suggest to use log. I decided to try both log transformation and square root transformation to see which one is better. 
+
+I first tried to see the square root one and see its av plots: 
+
+```{r}
+UN3_new = UN3_fix
+UN3_new['Pop'] = UN3_fix['Pop']^0.5
+model2 = lm(ModernC ~.,data=UN3_new)
+avPlots(model2)
+```
+
+Then I try the log one: 
+
+```{r}
+UN3_new2 = UN3_fix
+UN3_new2['Pop'] = log(UN3_fix['Pop'])
+model2_2 = lm(ModernC ~.,data=UN3_new2)
+avPlots(model2_2)
+par(mfrow=c(2,2))
+plot(model2_2)
+par(mfrow=c(1,1))
+```
+
+At last I find out the log transformation is better in the new avplots because in the sqrt root transformation pop still looks crowded together. 
+
+Therefore, I decided to use the log transformation on Pop. The avPlots for Pop becomes much better. 
+
+I also take a look on 4 diagonostic plots and they become better too. For specific, The left skewed problem is better than before. But it looks like there's an outlier problem.
+
 
 7. Given the selected transformations of the predictors, select a transformation of the response using `MASS::boxcox` or `car::boxCox` and justify.
 
 
 ```{r}
-
+boxcox(model2_2)
+x= boxcox(model2_2)$x
+y = boxcox(model2_2)$y
+table2 = cbind(x,y)
+table2=as.data.frame(table2)
+head(arrange(table2,desc(y)))
 ```
 
+Since the interval of lambda includes 1 and I asked the professor, she suggests to not do any transformations to y. But I will still try to fit the y^0.5 to see if it getting anything better. 
+
+```{r}
+UN3_final = UN3_new2
+UN3_final['ModernC'] = UN3_final['ModernC']^0.5
+model3 = lm(ModernC ~.,data=UN3_final)
+par(mfrow=c(2,2))
+plot(model3)
+par(mfrow=c(1,1))
+avPlots(model3)
+summary(model3)
+summary(model2_2)
+```
+
+By looking at these plots, I think model2_2 is better then model 3(the model after transforming y)by looking at assumption plots. In the residual fitted plots, model3's residual plots looks not that flat. And the scale location plot looks like there's a decreasing trend. 
+
+By looking at avplots, I also think model2_2 is better because the relationship between variables are more clear in model2_2 avplots. 
+
+Therefore, I will not transform Y. 
+
 8.  Fit the regression using the transformed variables.  Provide residual plots and added variables plots and comment.  If you feel that you need additional transformations of either the response or predictors, repeat any steps until you feel satisfied.
+
+```{r}
+UN3_final = UN3_new2
+UN3_final['ModernC'] = UN3_final['ModernC']
+model4 = lm(ModernC ~.,data=UN3_final)
+par(mfrow=c(2,2))
+plot(model3)
+par(mfrow=c(1,1))
+avPlots(model4)
+summary(model4)
+```
+
+I am pretty satisfied with all other variables except for the PPgdp, so I decided to check them one more time and I discovered that no further transformation is needed. But I still want to try if PPgdp may need one more transformation. Just have a try:
+
+```{r}
+powerTransform(as.matrix(UN3_final)~.,family="bcnPower",data=UN3_final)
+UN3_final2 = UN3_final
+UN3_final2['PPgdp'] = log(UN3_final['PPgdp'])
+model4_2 = lm(ModernC ~.,data=UN3_final2)
+par(mfrow=c(2,2))
+plot(model4_2)
+par(mfrow=c(1,1))
+avPlots(model4_2)
+```
+
+The plots did not look like having a big difference, especially qq plots become even worse, so we look at the summary of the model:
+
+```{r}
+summary(model4_2)
+summary(model4)
+summary(model2_2)
+```
+
+It basically only have very very slightly difference for the model, less then 0.15 changes in adjusted r squared and nearly no changes on significance level on the PPgdp or on the diagnostic plots. So I think do one more transformation is redundant. 
+
+Therefore, after several test, I conclude my first model is the best model:
+
+```{r}
+summary(model2_2)
+```
+
+
 
 9. Start by finding the best transformation of the response and then find transformations of the predictors.  Do you end up with a different model than in 8?
 
 
 ```{r}
-
+boxcox(model)
+x2= boxcox(model)$x
+y2 = boxcox(model)$y
+table3 = cbind(x2,y2)
+table3=as.data.frame(table3)
+head(arrange(table3,desc(y2)))
+#so there's no transformation for y 
+UN3_q9 = UN3_fix
+UN3_q9['ModernC'] = UN3_q9['ModernC']
+model_q9 = lm(ModernC ~.,data=UN3_q9)
+boxTidwell(ModernC~Pop+PPgdp,~Change+Purban+Fertility+Frate,data=UN3_q9)
+powerTransform(as.matrix(UN3_q9)~.,family="bcnPower",data=UN3_q9)
+UN3_Q9_2 = UN3_q9
+UN3_Q9_2['Pop'] = log(UN3_q9['Pop'])
+model_q9 = lm(ModernC ~.,data=UN3_Q9_2)
+summary(model_q9)
+summary(model2_2)
 ```
+
+I got the excatly the same model as question 8 because I did not do any transformation to Y as reasons mentioned above. 
+
 
 10.  Are there any outliers or influential points in the data?  Explain.  If so, refit the model after removing any outliers and comment on residual plots.
 
 
 ```{r}
-
+par(mfrow=c(2,2))
+plot(model2_2)
+par(mfrow=c(1,1))
+avPlots(model2_2)
 ```
+
+By looking at the data, I think the data point cook islands is an outlier because in the avPlots nearly every plots Cook Island exists as an outlier. so I will remove it to see what happens:
+
+```{r}
+UN3_final3 = UN3_final2[-28,]
+model2_3 = lm(ModernC ~.,data=UN3_final3)
+summary(model2_3)
+par(mfrow=c(2,2))
+plot(model2_3)
+par(mfrow=c(1,1))
+avPlots(model2_3)
+```
+
+Actually I do think scale location plot and fitted residual plot is better than before and by looking at the summary the adjusted R squared increased a lot. So I decided to remove Cooks island from my model. 
+
 
 ## Summary of Results
 
@@ -103,16 +295,55 @@ on your findings regarding trying to predict `ModernC` from the other variables.
 
 
 ```{r}
-
+coefficients(model2_3)
+summary(model2_3)
+rownames = names(model2_3$coefficients)
+ci = matrix(data=NA, nrow = 7, ncol = 2)
+for(i in 1:length(rownames)){
+  ci[i,] = confint(model2_3,rownames[i],level=0.95)
+}
+ci = as.data.frame(ci)
+rownames(ci) = colnames(UN3_final3)
+rownames(ci)[1] = 'Intercept'
+colnames(ci) = c('2.5%','97.5%')
+rownames(ci)[5] = "Pop (10% increase)"
+ci["Pop (10% increase)", ] = ci["Pop (10% increase)", ] * log(110 / 100)
+kable(ci,format='markdown')
 ```
+
+
+Interpretation: 
+(a) Change: For each one point increase in the annual population growth rate, the ModernC (Percent of unmarried women using a modern method of contraception.) will increase by 6.117.
+
+(b) Frate: For each one point increase in the Frate (percent of female over age 15 economically active), the ModernC(Percent of unmarried women using a modern method of contraception.) will increase by 0.20474.
+
+(c) Fertility: For each one point increase in Fertility (the expected number of live births per female), the ModernC (Percent of unmarried women using a modern method of contraception.) will decrease by 10.515.
+
+(d) Purban: For each one  point increase in Purban (percent of population that is urban), the ModernC (Percent of unmarried women using a modern method of contraception.) will decrease by 0.0825.
+
+(e) Pop: For each 10% increase in Population, the ModernC (Percent of unmarried women using a modern method of contraception.) will increase by 1.89052 * log(1.1) = 0.1802.
+
+(f) PPgdp: For each one point increase in PPgdp (per Capita 2001 GDP), The modernC (Percent of unmarried women using a modern method of contraception.) will increase by 5.433. 
+
 
 
 12. Provide a paragraph summarizing your final model  and findings suitable for the US envoy to the UN after adjusting for outliers or influential points.   You should provide a justification for any case deletions in your final model
 
 
 ```{r}
-
+summary(model2_3)
 ```
+
+
+My final model is:
+
+ModernC = -11.24467 + 6.117Change + + 5.433PPgdp + 0.205Frate - 10.515Fertility - 0.0825Purban + 1.89log(Pop) 
+
+My final model excludes Cook island because i think it's highly influential and are outliers in all av plots. I also applied log transformation to Pop suggested by powerTransformation() and av plots. 
+
+From the summary plot we can see that all variables except Purban are very significant. Change, PPgdp, Frate and log(pop) are positive correlated to ModernC and Fertility, Purban is negatively related to ModernC. Two of there are pretty interesting: First is the relationship between Change and ModernC, which means higher population growth rate correlates to higher Percent of unmarried women using a modern method of contraception, that's kind of contradiction. Similar things happending on log(pop)
+and ModernC means that larger population implies Percent of unmarried women using a modern method of contraception. Maybe further research needed on that topics. Other coefficients are pretty reasonable. 
+
 
 
 ## Methodology
@@ -120,5 +351,64 @@ on your findings regarding trying to predict `ModernC` from the other variables.
     
 13. Prove that the intercept in the added variable scatter plot will always be zero.  _Hint:  use the fact that if $H$ is the project matrix which contains a column of ones, then $1_n^T (I - H) = 0$.  Use this to show that the sample mean of residuals will always be zero if there is an intercept._
 
+Let $H = X_{(j)}(X_{(j)}^TX_{(j)})^{-1}X_{(j)}^T$
+
+$e_{Y} = \hat{B_{0}} + \hat{B_{1}}e_{x_{j}}$
+
+So $(I-H)y = \hat{B_{0}}+\hat{B_{1}}(I-H)x_{j}$
+
+since $\hat{B_{1}} = (X^TX)X^Ty$,for here let $X = (I-H)x_{j}$
+
+then the equation becomes:
+
+$(I-H)y = \hat{B_{0}}1_{n} + [x_{j}^T(I-H)(I-H)x_{j}]^{-1}[(I-H)x_{j}]^T(I-H)y(I-H)x_{j}$
+
+$(I-H)y = \hat{B_{0}}1_{n} + [x_{j}^T(I-H)x_{j}]^{-1}x_{j}^T(I-H)y(I-H)x_{j}$
+
+multiply both sides by $x_{j}^T$ at the beginning:
+
+$x_{j}^T(I-H)y = x_{j}^T\hat{B_{0}}1_{n} + x_{j}^T[x_{j}^T(I-H)x_{j}]^{-1}x_{j}^T(I-H)y(I-H)x_{j}$
+
+$x_{j}^T(I-H)y = x_{j}^T1_{n}\hat{B_{0}} + x_{j}^T(I-H)x_{j}[x_{j}^T(I-H)x_{j}]^{-1}x_{j}^T(I-H)y$
+
+since $[x_{j}^T(I-H)x_{j}]^{-1}$ and $x_{j}^T(I-H)y$ are both a numeric value.
+
+Then:
+
+$x_{j}^T(I-H)y = \sum{x_{j}\hat{B_{0}}} + x_{j}^T(I-H)y$
+
+Therefore:
+
+$\sum{x_{j}\hat{B_{0}}} = 0$
+
+$\hat{B_{0}}$ = 0
+
+
+
 
 14. For multiple regression with more than 2 predictors, say a full model given by `Y ~ X1 + X2 + ... Xp`   we create the added variable plot for variable `j` by regressing `Y` on all of the `X`'s except `Xj` to form `e_Y` and then regressing `Xj` on all of the other X's to form `e_X`.  Confirm that the slope in a manually constructed added variable plot for one of the predictors  in Ex. 10 is the same as the estimate from your model. 
+
+```{r}
+model6 = lm(ModernC ~ Change + PPgdp + Frate + Pop + Purban,data=UN3_final3)
+UN3_predict = UN3_final3
+UN3_predict['prediction'] = predict(model6,UN3_final3)
+UN3_predict['e'] = UN3_predict['ModernC'] - UN3_predict['prediction']
+
+model4 = lm(Fertility ~ Change + PPgdp + Frate + Pop + Purban,data=UN3_final3)
+UN3_predict2 = UN3_final3
+UN3_predict2['predictionF'] = predict(model4,UN3_final3)
+UN3_predict2['eF'] = UN3_predict2['Fertility'] - UN3_predict2['predictionF']
+
+e = c(UN3_predict['e'],UN3_predict2['eF'])
+e = as.data.frame(e)
+model5 = lm(e~eF, data= e)
+model5
+```
+
+By selecting Fertility as my variable tested, Basically what I did is that I first regress the ModernC(Y) on all other variables(Xi) besides Fertility. And I made a prediction for Y and calculate eY at that situation.
+
+Then I regress Fertility on all other X variables and predict for the Fertility and calculate eX at this situation.
+
+At last I regress eY ~ eX and getting the slope coefficient of eX is the same as the coefficients of Fertility in my final model(model2_3). 
+
+
