@@ -1,6 +1,6 @@
 ---
 title: "HW2 STA521 Fall18"
-author: 'Zhen Han Si, 0854615, szhhan'
+author: "Zhen Han Si, 0854615, szhhan"
 date: "Due September 23, 2018 5pm"
 output:
   word_document: default
@@ -26,15 +26,10 @@ This exercise involves the UN data set from `alr3` package. Install `alr3` and t
 0.  Preliminary read in the data.  After testing, modify the code chunk so that output, messages and warnings are suppressed.  *Exclude text from final*
 
 ```{r data}
+options(warn=-1)
 library(alr3)
 data(UN3, package="alr3")
-help(UN3) 
-library(car)
-library(knitr)
-library(ggplot2)
-library(GGally)
-library(MASS)
-library(dplyr)
+# help(UN3) 
 library(car)
 ```
 
@@ -49,6 +44,17 @@ sapply(UN3,class)
 All the variables except Purban have missing values. All the values are quantitative. 
 
 2. What is the mean and standard deviation of each quantitative predictor?  Provide in a nicely formatted table.
+
+Import the library needed 
+```{r}
+options(warn=-1)
+library(knitr)
+library(ggplot2)
+library(GGally)
+library(MASS)
+library(dplyr)
+library(car)
+```
 
 ```{r}
 average = sapply(UN3,mean,na.rm=TRUE)
@@ -66,9 +72,9 @@ highlighting the relationships among the predictors. Comment
 on your findings regarding trying to predict `ModernC` from the other variables.  Are there potential outliers, nonlinear relationships or transformations that appear to be needed based on your graphical EDA?
 
 ```{r}
-scatterplotMatrix(UN3)
+scatterplotMatrix(UN3,main='Scatter Plot for the variables')
 UN3_fix = na.omit(UN3)
-ggpairs(UN3_fix)
+ggpairs(UN3_fix,title='ggpair Plot for the variables')
 par(mfrow=c(3,2))
 boxplot(UN3['Pop'],main='pop')
 boxplot(UN3['Fertility'],main='Fertility')
